@@ -1,88 +1,88 @@
-from flask import Flask, render_template, redirect, url_for, request, session, flash
-from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User
-from . import db
+# filepath: app/routes.py
+from flask import Blueprint, render_template, url_for, flash, redirect, request
+from flask_login import login_user, current_user, logout_user, login_required
+from app import db, bcrypt
+from app.models import User
 
-app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+bp = Blueprint('main', __name__)
 
-@app.route('/register', methods=['GET', 'POST'])
+@bp.route("/register", methods=['GET', 'POST'])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-        password_hash = generate_password_hash(password)
-
-        new_user = User(username=username, email=email, password_hash=password_hash)
-        db.session.add(new_user)
+        username = request.form.get('username')
+        email = request.form.get('email')
+        role = request.form.get('role')
+        password = request.form.get('password')
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        user = User(username=username, email=email, role=role, password_hash=hashed_password)
+        db.session.add(user)
         db.session.commit()
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
+        flash('Your account has been created!', 'success')
+        return redirect(url_for('main.login'))
     return render_template('register.html')
 
-@app.route('/login', methods=['GET', 'POST'])
+@bp.route("/login", methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-
-        if user and check_password_hash(user.password_hash, password):
-            session['user_id'] = user.id
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        if user and bcrypt.check_password_hash(user.password_hash, password):
+            login_user(user, remember=True)
+            return redirect(url_for('main.dashboard'))
         else:
-            flash('Login failed. Check your username and/or password.', 'danger')
+            flash('Login Unsuccessful. Please check email and password', 'danger')
     return render_template('login.html')
 
-@app.route('/dashboard')
+@bp.route("/dashboard")
+@login_required
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     users = User.query.all()
     return render_template('dashboard.html', users=users)
 
-@app.route('/add_user', methods=['POST'])
-def add_user():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    username = request.form['username']
-    email = request.form['email']
-    password = request.form['password']
-    password_hash = generate_password_hash(password)
+@bp.route("/logout")
+def logout():
+    logout_user()
+    return redirect(url_for('main.login'))
 
-    new_user = User(username=username, email=email, password_hash=password_hash)
-    db.session.add(new_user)
-    db.session.commit()
-    flash('User added successfully!', 'success')
-    return redirect(url_for('dashboard'))
-
-@app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
-def edit_user(user_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(user_id)
+@bp.route("/user/new", methods=['GET', 'POST'])
+@login_required
+def new_user():
     if request.method == 'POST':
-        user.username = request.form['username']
-        user.email = request.form['email']
+        username = request.form.get('username')
+        email = request.form.get('email')
+        role = request.form.get('role')
+        password = request.form.get('password')
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        user = User(username=username, email=email, role=role, password_hash=hashed_password)
+        db.session.add(user)
         db.session.commit()
-        flash('User updated successfully!', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('edit_user.html', user=user)
+        flash('User has been created!', 'success')
+        return redirect(url_for('main.dashboard'))
+    return render_template('create_user.html')
 
-@app.route('/delete_user/<int:user_id>', methods=['POST'])
+@bp.route("/user/<int:user_id>/update", methods=['GET', 'POST'])
+@login_required
+def update_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if request.method == 'POST':
+        user.username = request.form.get('username')
+        user.email = request.form.get('email')
+        user.role = request.form.get('role')
+        db.session.commit()
+        flash('User has been updated!', 'success')
+        return redirect(url_for('main.dashboard'))
+    return render_template('update_user.html', user=user)
+
+@bp.route("/user/<int:user_id>/delete", methods=['POST'])
+@login_required
 def delete_user(user_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(user_id)
+    user = User.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()
-    flash('User deleted successfully!', 'success')
-    return redirect(url_for('dashboard'))
-
-@app.route('/logout')
-def logout():
-    session.pop('user_id', None)
-    flash('You have been logged out.', 'success')
-    return redirect(url_for('login'))
+    flash('User has been deleted!', 'success')
+    return redirect(url_for('main.dashboard'))

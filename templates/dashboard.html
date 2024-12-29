@@ -159,11 +159,12 @@
       </div>
     </div>
 
+    <!-- Edit User Modal -->
     <div id="editUserModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div class="relative top-20 mx-auto p-8 border w-[28rem] shadow-2xl rounded-2xl bg-white border-white/20">
         <div class="mt-2">
           <h3 class="text-2xl font-bold text-gray-900 mb-6">Edit User</h3>
-          <form id="editUserForm" method="POST" action="" class="space-y-6">
+          <form id="editUserForm" method="POST" action="" class="space-y-6" onsubmit="return checkRoleChange()">
             <div>
               <label class="block text-gray-700 text-sm font-bold mb-2" for="edit-username">Username</label>
               <input
@@ -196,11 +197,18 @@
             </div>
             <div>
               <label class="block text-gray-700 text-sm font-bold mb-2" for="edit-role">Role</label>
-              <select name="role" id="edit-role" required class="w-full px-4 py-2.5 text-gray-900 bg-green-50 rounded-xl border border-green-200 focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200">
+              <select
+                name="role"
+                id="edit-role"
+                required
+                class="w-full px-4 py-2.5 text-gray-900 bg-green-50 rounded-xl border border-green-200 focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200"
+                data-initial-role=""
+              >
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
+            <div id="role-warning" class="hidden text-red-500 text-sm font-bold mb-2">Anda tidak dapat mengubah role kembali ke admin</div>
             <div class="flex justify-between pt-4">
               <button
                 type="submit"
@@ -223,15 +231,10 @@
 
     <script>
       function editUser(id, username, email, role) {
-        if (!id) {
-          console.error("User ID cannot be empty");
-          return;
-        }
-
-        // Set form values
         document.getElementById("edit-username").value = username;
         document.getElementById("edit-email").value = email;
         document.getElementById("edit-role").value = role;
+        document.getElementById("edit-role").setAttribute("data-initial-role", role);
         document.getElementById("editUserForm").action = `/edit_user/${id}`;
 
         // Show modal with animation
@@ -240,6 +243,26 @@
         setTimeout(() => {
           modal.querySelector(".relative").classList.add("transform", "translate-y-0", "opacity-100");
         }, 100);
+      }
+
+      function checkRoleChange() {
+        const roleSelect = document.getElementById("edit-role");
+        const initialRole = roleSelect.getAttribute("data-initial-role");
+        const roleWarning = document.getElementById("role-warning");
+
+        if (initialRole === "user" && roleSelect.value === "admin") {
+          roleWarning.classList.remove("hidden");
+          showNotification("You cannot change the role back to admin.", "error");
+
+          // Hide the warning message after 2 seconds
+          setTimeout(() => {
+            roleWarning.classList.add("hidden");
+          }, 2000);
+
+          return false; // Prevent form submission
+        }
+
+        return true; // Allow form submission
       }
 
       // Close modals when clicking outside
@@ -267,7 +290,7 @@
         setTimeout(() => {
           notification.classList.add("opacity-0", "translate-x-full");
           setTimeout(() => notification.remove(), 500);
-        }, 3000);
+        }, 2000); // Change to 2000 milliseconds (2 seconds)
       }
     </script>
   </div>
